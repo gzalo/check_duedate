@@ -38,9 +38,13 @@ define service {
 
 # check_duedate arguments
 `check_duedate --id <DUEID> [--warning <WARNING_THRESHOLD>] [--critical <CRITICAL_THRESHOLD>] [--unit <UNIT>]`
+
 The id must match the name of the expiration that was configured using the web interface.
+
 The default thresholds are 2 days (warning) and 1 day (critical)
+
 Valid values for unit are H (hours), M (minutes), D (days)
+
 The perfdata is also output using the same units, so it should be kept constant to avoid discontinuities.
 
 # Credits
