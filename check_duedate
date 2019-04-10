@@ -1,0 +1,104 @@
+#!/bin/php
+<?php
+/*
+Check_duedate
+2019 - Gonzalo Ávila Alterach - gzalo.com
+*/
+
+$dataFile = "/store/check_duedate_data";
+
+define("STATUS_OK", 0);
+define("STATUS_WARNING", 1);
+define("STATUS_CRITICAL", 2);
+define("STATUS_UNKNOWN", 3);
+
+function nagios_exit($stdout='', $exitcode=0) {
+	print($stdout);
+	exit($exitcode);
+}
+
+function usage(){
+    $msg = "check_duedate --id <DUEID> [--warning <WARNING_THRESHOLD>] [--critical <CRITICAL_THRESHOLD>] [--unit <UNIT>]\n";
+    $msg .= "  valid units: H (hours), M (minutes), D (days)\n";
+    nagios_exit($msg, STATUS_UNKNOWN);
+}
+
+$parsed = getopt("i:c:w:u:", ["help", "id:", "warning:", "critical:", "unit:"]);
+
+if(isset($parsed['help']) || $argc == 1)
+    usage();
+
+if(isset($parsed['id']))
+	$id = $parsed['id'];
+else if(isset($parsed['i']))
+	$id = $parsed['i'];
+else
+	nagios_exit("Mising ID argument\n", STATUS_UNKNOWN);
+
+$unit = 'm';
+if(isset($parsed['unit']))
+	$unit = strtolower($parsed['unit']);
+else if(isset($parsed['u']))
+  	$unit = strtolower($parsed['u']);
+
+if($unit != 'h' && $unit != 'm' && $unit != 'd')
+    die("Invalid unit. Valid units: H,M,D\n");
+    
+if(isset($parsed['warning']))
+  	$warning = $parsed['warning'];
+else if(isset($parsed['w']))
+  	$warning = $parsed['w'];
+else
+  	$warning = 2880;    // Default warning threshold => 2 days
+
+if(isset($parsed['critical']))
+  	$critical = $parsed['critical'];
+else if(isset($parsed['c']))
+  	$critical = $parsed['c'];
+else
+  	$critical = 1440;   // Default critical threshold => 1 day
+
+if(!file_exists($dataFile))
+    nagios_exit("Data file does not exist\n", STATUS_UNKNOWN);
+
+$data = file_get_contents($dataFile);
+
+if($data === false)
+    nagios_exit("Can't read data file\n", STATUS_UNKNOWN);
+
+$parsedData = json_decode($data, true);
+
+if($parsedData === null)
+    nagios_exit("Can't parse data file\n", STATUS_UNKNOWN);
+
+if(!isset($parsedData[$id]))
+    nagios_exit("Data ID $id does not exist\n", STATUS_UNKNOWN);
+
+$dueTime = $parsedData[$id];
+$deltaTime = $parsedData[$id] - time();
+$unitFull = '';
+
+switch($unit){
+	case 'h':
+		$deltaTime /= (60*60);
+		$unitFull = 'hours(s)';
+		break;
+	case 'm':
+		$deltaTime /= (60);
+		$unitFull = 'minute(s)';
+		break;
+	case 'd':
+		$deltaTime /= (60*60*24);
+		$unitFull = 'days(s)';
+		break;
+}
+
+$deltaTimeRounded = round($deltaTime, 2);
+$perfdata = "remaining=$deltaTimeRounded;$warning:;$critical:";
+
+if($deltaTime < $critical)
+	nagios_exit("CRITICAL: $deltaTimeRounded $unitFull until due date (thresholds: $warning, $critical) | $perfdata\n", STATUS_CRITICAL);
+else if($deltaTime < $warning)
+	nagios_exit("WARNING: $deltaTimeRounded $unitFull until due date (thresholds: $warning, $critical) | $perfdata\n", STATUS_WARNING);
+else
+	nagios_exit("OK: $deltaTimeRounded $unitFull until due date (thresholds: $warning, $critical) | $perfdata\n", STATUS_OK);
